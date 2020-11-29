@@ -1,3 +1,9 @@
+from PIL import Image
+import numpy as np
+import scipy.signal
+import cv2
+
+
 class Environment:
     def __init__(self, shape=(100, 100), tree_density=0.55, random_seed=None):
 
@@ -85,7 +91,7 @@ class Environment:
         # make fuel map
         self._fuel_map = self.generate_fuel_map()
 
-    def snapshot(self):
+    def snapshot(self, drone_pos=None):
         # gets a snapshot of the state
 
         red = self._state_map.copy()
@@ -94,14 +100,25 @@ class Environment:
         green = self._fuel_map.copy()
         green[red > 0] = 0
 
+        blue = np.zeros_like(green)
+
+        # draw drone position in white
+        if drone_pos is not None:
+            x, y = drone_pos
+            green[y, x] = 255
+            red[y, x] = 255
+            blue[y, x] = 255
+
         # if we need to resize
         red = cv2.resize(red, (500, 500), interpolation=cv2.INTER_NEAREST)
         green = cv2.resize(green, (500, 500), interpolation=cv2.INTER_NEAREST)
+        blue = cv2.resize(blue, (500, 500), interpolation=cv2.INTER_NEAREST)
 
-        blue = np.zeros_like(green)
         im = np.stack([red, green, blue], axis=-1)
+        im = Image.fromarray(im)
+        im = im.transpose(Image.FLIP_TOP_BOTTOM)
 
-        return Image.fromarray(im)
+        return im
 
     def fire(self):
         red = self._state_map.copy()
@@ -112,7 +129,7 @@ class Environment:
         blue = np.zeros_like(red)
 
         im = np.stack([red, green, blue], axis=-1)
-        return Image.fromarray(im)
+        return Image.fromarray(im).transpose(Image.FLIP_TOP_BOTTOM)
 
     def fuel(self):
         green = self._fuel_map.copy()
@@ -122,7 +139,7 @@ class Environment:
         blue = np.zeros_like(green)
 
         im = np.stack([red, green, blue], axis=-1)
-        return Image.fromarray(im)
+        return Image.fromarray(im).transpose(Image.FLIP_TOP_BOTTOM)
 
     @staticmethod
     def gkern(l=5, sig=1.0):
