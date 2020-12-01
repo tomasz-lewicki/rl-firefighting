@@ -10,6 +10,7 @@ class Environment:
         self._shape = shape
         self._tree_density = tree_density
         self._seed = random_seed
+        self._step_cnt = 0
 
         # make state map where:
         # 0 - intact
@@ -58,8 +59,10 @@ class Environment:
         kernel3by3 = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])  # 3x3
         return kernel3by3
 
-    def step(self, burn_rate=3, ignition_prob=0.2):
-
+    def simulation_step(self, burn_rate=3, ignition_prob=0.2):
+        """
+        simulation setep (without advancing the whole environment)
+        """
         # assign to local variables
         state = self._state_map
         fuel = self._fuel_map
@@ -84,7 +87,50 @@ class Environment:
         # states_history[i] = state
         # fuel_history[i] = fuel
 
-    def reset():
+    @property
+    def done(self):
+        return True if self._state_map.sum() == 0 else False
+
+    def step(self, drone_pos, action, sim_step_every=10):
+        """
+        environment step
+        """
+        if self._step_cnt % sim_step_every == 0:
+            self.simulation_step(burn_rate=3, ignition_prob=0.2)
+        self._step_cnt += 1
+
+        x, y = drone_pos
+        observation = self.observe(drone_pos)
+        reward = self.extinguish(drone_pos)
+
+        return observation, reward
+
+    def extinguish(self, drone_pos, fov=[10, 10]):
+        """
+        extinguish cells below drone_pos
+        """
+        x, y = drone_pos
+        fov_x, fov_y = int((fov[0] - 1) / 2), int((fov[1] - 1) / 2)
+
+        slice_y = slice(y - fov_y, y + fov_y + 1)
+        slice_x = slice(x - fov_x, x + fov_x + 1)
+        view = self._state_map[slice_y, slice_x]
+
+        fire_count = self._state_map[slice_y, slice_x].sum()
+
+        # set sate to 0 (extinguish)
+        self._state_map[y - fov_y : y + fov_y + 1, x - fov_x : x + fov_x + 1] = 0
+
+        return fire_count
+
+    def observe(self, drone_pos, fov=[3, 3]):
+        x, y = drone_pos
+        fov_x, fov_y = int((fov[0] - 1) / 2), int((fov[1] - 1) / 2)
+        view = self._state_map[y - fov_y : y + fov_y + 1, x - fov_x : x + fov_x + 1]
+
+        return view
+
+    def reset(self):
         self._state_map = np.zeros(shape, dtype=np.uint8)
         self.ignite_center()
 
@@ -105,9 +151,9 @@ class Environment:
         # draw drone position in white
         if drone_pos is not None:
             x, y = drone_pos
-            green[y, x] = 255
-            red[y, x] = 255
-            blue[y, x] = 255
+            green[y - 1 : y + 1, x - 1 : x + 1] = 255
+            red[y - 1 : y + 1, x - 1 : x + 1] = 255
+            blue[y - 1 : y + 1, x - 1 : x + 1] = 255
 
         # if we need to resize
         red = cv2.resize(red, (500, 500), interpolation=cv2.INTER_NEAREST)
