@@ -109,11 +109,14 @@ class Environment:
         observation = self.observe(drone_pos)
         reward = self.extinguish(drone_pos)
 
+        if reward == 0:
+            reward = -1
+
         return observation, reward
 
     def extinguish(self, drone_pos, fov=[3, 3]):
         """
-        extinguish cells below drone_pos
+        extinguish cells within fov below drone_pos
         """
         x, y = drone_pos
         fov_x, fov_y = int((fov[0] - 1) / 2), int((fov[1] - 1) / 2)
@@ -143,7 +146,7 @@ class Environment:
         """
         restores the initial state of the environment
         """
-        self._state_map = np.zeros(shape, dtype=np.uint8)
+        self._state_map = np.zeros(self._shape, dtype=np.uint8)
         self.ignite_center()
 
         # make fuel map
