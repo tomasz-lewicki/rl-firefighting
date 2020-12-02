@@ -89,9 +89,15 @@ class Environment:
 
     @property
     def done(self):
+        """
+        Termminal state of the environment.
+        Returns True if the fire either:
+        - was put out
+        - or died out
+        """
         return True if self._state_map.sum() == 0 else False
 
-    def step(self, drone_pos, action, sim_step_every=10):
+    def step(self, drone_pos, action, sim_step_every=1):
         """
         environment step
         """
@@ -105,7 +111,7 @@ class Environment:
 
         return observation, reward
 
-    def extinguish(self, drone_pos, fov=[10, 10]):
+    def extinguish(self, drone_pos, fov=[3, 3]):
         """
         extinguish cells below drone_pos
         """
@@ -123,7 +129,10 @@ class Environment:
 
         return fire_count
 
-    def observe(self, drone_pos, fov=[3, 3]):
+    def observe(self, drone_pos, fov=[5, 5]):
+        """
+        Get observations within fov from drone_pos
+        """
         x, y = drone_pos
         fov_x, fov_y = int((fov[0] - 1) / 2), int((fov[1] - 1) / 2)
         view = self._state_map[y - fov_y : y + fov_y + 1, x - fov_x : x + fov_x + 1]
@@ -131,6 +140,9 @@ class Environment:
         return view
 
     def reset(self):
+        """
+        restores the initial state of the environment
+        """
         self._state_map = np.zeros(shape, dtype=np.uint8)
         self.ignite_center()
 
