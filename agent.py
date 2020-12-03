@@ -1,4 +1,6 @@
 import numpy as np
+import torch.nn
+from videoio import VideoWriter
 
 action2name = {
     0: "N",
@@ -22,41 +24,64 @@ delta2action = {v: k for k, v in action2delta.items()}
 class Agent:
     def __init__(
         self,
-        init_position=[0, 0],
+        init_position=[50, 50],
         env_shape=(100, 100),
-        x_bounds=range(2, 97),
-        y_bounds=range(2, 97),
+        fov_shape=(7, 7),
+        fov_extinguish=(5, 5),
+        lr=1e-6,
     ):
 
         self._env_shape = env_shape
         self.position = np.array(init_position)
-        self._x_bounds = x_bounds
-        self._y_bounds = y_bounds
+        self._x_bounds = range(fov_shape[1], env_shape[1] - fov_shape[0])
+        self._y_bounds = range(fov_shape[0], env_shape[0] - fov_shape[1])
         self._actions, self._traj = self.generate_trajectory()
-        self._found_fire = False
-        self._view = None
+        self._fov_shape = fov_shape
+        self._fov_extinguish = fov_extinguish
+        self._view = np.zeros(fov_shape)
+
+        self._policy = torch.nn.Sequential(
+            torch.nn.Linear(
+                fov_shape[0] * fov_shape[1], 2048
+            ),  # input: (the 7x7 segment view)
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Linear(2048, 2048),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Linear(2048, 4),  # output: (the values of N, S, W, E actions)
+            torch.nn.Sigmoid(),
+        )
+
+        self._optimizer = torch.optim.Adam(self._policy.parameters(), lr)
 
     def random_policy(self):
         Q = np.random.rand(4)
         return Q
 
-    def nn_policy(self):
-        return self.random_policy()
-
-    def action(self):
+    def action(self, epsilon):
         """
-        sample and return action
+        sample and return action using epsilon-greedy approach
+        epsilon is the fraction of random actions
         """
-        # until we find fire, sample from trajectory
-        if not self._found_fire:
-            action = self._actions.pop(0)
+        # sample randomly
+        Q_rand = self.random_policy()
 
-        # sample from policy
-        else:
-            Q = self.random_policy()
-            viable = self.viable_actions()
-            action = np.argmax(Q[viable])
+        # sample form policy
+        view = self._view.flatten()  # 5x5 view of environment state
+        self._tensor_in = torch.tensor(view, dtype=torch.float32)
+        self._tensor_out = self._policy(self._tensor_in)
+        Q_policy = (
+            self._tensor_out.detach().numpy()
+        )  # Q function values approximated by
 
+        # epsilon-greedy
+        Q = Q_rand if np.random.rand() < epsilon else Q_policy
+
+        # assign -inf reward to actions that take us to infeasible states
+        viable = self.viable_actions()
+        Q[~viable] = -np.inf
+        action = np.argmax(Q)
+
+        # update position based on chosen action
         delta = action2delta[action]
         self.position += delta
 
@@ -69,9 +94,15 @@ class Agent:
     @observation.setter
     def observation(self, value):
         self._view = value
-        # bool addition
 
-    #         self._found_fire = or
+    def backprop(self, action, reward):
+        self._optimizer.zero_grad()
+
+        tensor_reward = torch.zeros(4, dtype=torch.float32)
+        tensor_reward[action] = reward
+        self._tensor_out.backward(tensor_reward)
+
+        self._optimizer.step()
 
     def viable_actions(self):
         """
@@ -108,15 +139,6 @@ class Agent:
     def reset(position=[0, 0]):
         self.position = np.array(position)
 
-    def extinguish(self, env, range_xy=(3, 3)):
-        x, y = self.position
-        dx, dy = range_xy
-        env._state_map[y - dy : y + dy, x - dx : x + dx] = 0
-
-    def observe(self, env, fov=(3, 3)):
-        view = env._state_map
-        self._view = env._state_map[y - dy : y + dy, x - dx : x + dx]
-
     def generate_trajectory(self, step_width=10):
 
         actions = []
@@ -147,3 +169,10 @@ class Agent:
                 actions.append(name2action["E"])
 
         return actions, traj
+
+    @staticmethod
+    def save_video(filename, frame_buffer):
+        writer = VideoWriter(filename, resolution=(500, 500), fps=60)
+        for frame in frame_buffer:
+            writer.write(np.array(frame))
+        writer.close()

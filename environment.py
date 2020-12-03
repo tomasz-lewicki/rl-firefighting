@@ -97,7 +97,7 @@ class Environment:
         """
         return True if self._state_map.sum() == 0 else False
 
-    def step(self, drone_pos, action, sim_step_every=1):
+    def step(self, drone_pos, action, sim_step_every=10):
         """
         environment step
         """
@@ -127,10 +127,12 @@ class Environment:
 
         fire_count = self._state_map[slice_y, slice_x].sum()
 
+        reward = fire_count / (fov[0] * fov[1] * 255)  # normalize the reward to 0-1
+
         # set sate to 0 (extinguish)
         self._state_map[y - fov_y : y + fov_y + 1, x - fov_x : x + fov_x + 1] = 0
 
-        return fire_count
+        return reward
 
     def observe(self, drone_pos, fov=[5, 5]):
         """
