@@ -12,7 +12,8 @@ action2name = {
 name2action = {v: k for k, v in action2name.items()}
 
 action2delta = {
-    0: (0, 1),  # x,y format
+    # NN output to (y,x) format
+    0: (0, 1),
     1: (-1, 0),
     2: (0, -1),
     3: (1, 0),
@@ -33,8 +34,8 @@ class Agent:
 
         self._env_shape = env_shape
         self.position = np.array(init_position)
-        self._x_bounds = range(fov_shape[1], env_shape[1] - fov_shape[0])
-        self._y_bounds = range(fov_shape[0], env_shape[0] - fov_shape[1])
+        self._x_bounds = range(fov_shape[1] + 1, env_shape[1] - fov_shape[0] - 1)
+        self._y_bounds = range(fov_shape[0] + 1, env_shape[0] - fov_shape[1] - 1)
         self._actions, self._traj = self.generate_trajectory()
         self._fov_shape = fov_shape
         self._fov_extinguish = fov_extinguish
@@ -66,7 +67,7 @@ class Agent:
         Q_rand = self.random_policy()
 
         # sample form policy
-        view = self._view.flatten()  # 5x5 view of environment state
+        view = self._view.flatten()  # e.g. 5x5 view of environment state
         self._tensor_in = torch.tensor(view, dtype=torch.float32)
         self._tensor_out = self._policy(self._tensor_in)
         Q_policy = (
